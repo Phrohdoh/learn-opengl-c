@@ -66,8 +66,9 @@ static M matrix_ortho(float left, float right, float bottom, float top, float ne
 }
 
 void key_cb(GLFWwindow *window, int key, int scancode, int action, int mode) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GL_TRUE);
+    }
 }
 
 int main() {
@@ -81,7 +82,7 @@ int main() {
 
     GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "LearnOpenGL", NULL, NULL);
     if (window == NULL) {
-        printf("Failed to create GLFW window");
+        printf("Failed to create GLFW window\n");
         glfwTerminate();
         return -1;
     }
@@ -162,12 +163,9 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    // World-space coords
     Vertex verts[4];
-    create_4_verts(verts, 1.0f, 1.0f, 50.0f, 50.0f);
-    printf("[%.f, %.f]\n", verts[0].pos[0], verts[0].pos[1]);
-    printf("[%.f, %.f]\n", verts[1].pos[0], verts[1].pos[1]);
-    printf("[%.f, %.f]\n", verts[2].pos[0], verts[2].pos[1]);
-    printf("[%.f, %.f]\n", verts[3].pos[0], verts[3].pos[1]);
+    create_4_verts(verts, 0.0f, 0.0f, 50.0f, 50.0f);
 
     GLuint indices[] = {
         0, 1, 3,
@@ -194,7 +192,21 @@ int main() {
     // Unbind VAO
     glBindVertexArray(0);
 
-    M ortho = matrix_ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, 0.0f, 1000.0f);
+    M ortho = matrix_ortho(
+        0.0f
+        ,(float)WIDTH
+        ,(float)HEIGHT
+        ,0.0f
+        ,-10.0f
+        ,10.0f
+
+        //0.0f
+        //,50.0f
+        //,0.0f
+        //,50.0f
+        //,-10.0f
+        //,10.0f
+    );
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -205,10 +217,10 @@ int main() {
         glUseProgram(shaderProgram);
 
         GLint loc_mat_vm = glGetUniformLocation(shaderProgram, "mat_vm");
-        glUniformMatrix4fv(loc_mat_vm, 1, false, (GLfloat const *)&ortho);
+        glUniformMatrix4fv(loc_mat_vm, 1, false, (GLvoid const *)&ortho);
 
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, sizeof(indices), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 
         glfwSwapBuffers(window);
