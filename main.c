@@ -192,21 +192,7 @@ int main() {
     // Unbind VAO
     glBindVertexArray(0);
 
-    M ortho = matrix_ortho(
-        0.0f
-        ,(float)WIDTH
-        ,(float)HEIGHT
-        ,0.0f
-        ,-10.0f
-        ,10.0f
-
-        //0.0f
-        //,50.0f
-        //,0.0f
-        //,50.0f
-        //,-10.0f
-        //,10.0f
-    );
+    M ortho = matrix_ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -10.0f, 10.0f);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
