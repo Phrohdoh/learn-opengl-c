@@ -6,15 +6,27 @@
 #include <GLFW/glfw3.h>
 
 const GLchar *vertexShaderSource =
-    "#version 330\n"
-    "layout (location = 0) in vec2 pos2;"
-    "uniform mat4 mat_vm;"
+    "#version 330 core\n"
+    "layout (location = 0) in vec2 pos;"
+    "layout (location = 1) in vec2 uv;"
+    "uniform mat4 mOrtho;"
+    "out vec2 vTexCoord;"
     "void main() {"
-    "  gl_Position = mat_vm * vec4(pos2, 1.0, 1.0);"
+    "    vTexCoord = uv;"
+    "    gl_Position = mOrtho * vec4(pos, 0.0, 1.0);"
     "}";
 
-const GLchar *fragmentShaderSource = "#version 330 core\n"
-    "layout (location = 0) out vec4 color; void main() { color = vec4(1.0f, 0.0f, 0.0f, 1.0f); }";
+const GLchar *fragmentShaderSource =
+    "#version 330 core\n"
+    "in vec2 vTexCoord;"
+    "uniform usampler2D spriteData;"
+    "uniform sampler1D palette;"
+    "out vec4 color;"
+    "void main() {"
+    "    uint index = texture(spriteData, vTexCoord).r;"
+//  "    color = texelFetch(palette, int(index), 0);"
+    "    color = vec4(255.0/float(index), 0.0, 0.0, 1.0);"
+    "}";
 
 const uint32_t WIDTH = 1024;
 const uint32_t HEIGHT = 768;
@@ -97,6 +109,8 @@ int main() {
 
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
+
+    GLenum err;
     glViewport(0, 0, width, height);
 
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -160,12 +174,17 @@ int main() {
         }
     }
 
+    glUseProgram(shaderProgram);
+
+    glDetachShader(shaderProgram, vertexShader);
     glDeleteShader(vertexShader);
+
+    glDetachShader(shaderProgram, fragmentShader);
     glDeleteShader(fragmentShader);
 
     // World-space coords
     Vertex verts[4];
-    create_4_verts(verts, 0.0f, 0.0f, 50.0f, 50.0f);
+    create_4_verts(verts, 0.0f, 0.0f, 5.0f, 3.0f);
 
     GLuint indices[] = {
         0, 1, 3,
@@ -189,10 +208,68 @@ int main() {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(offsetof(Vertex, pos)));
 
+    // Store the uv in attrib 1
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(offsetof(Vertex, uv)));
+
     // Unbind VAO
     glBindVertexArray(0);
 
+    if ((err = glGetError()) != GL_NO_ERROR) {
+        printf("glGetError(bind buffer objs): %x\n", err);
+        return 1;
+    }
+
+    { // ****
+        GLbyte sprite_data[] = {
+            0, 1, 1, 0, 2,
+            0, 0, 0, 2, 1,
+            0, 0, 1, 1, 1,
+        };
+
+        GLsizei len_sprite_data = sizeof(sprite_data);
+        printf("len_sprite_data: %d\n", len_sprite_data);
+
+        GLuint tex_sprite;
+        glGenTextures(1, &tex_sprite);
+        glBindTexture(GL_TEXTURE_2D, tex_sprite);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, len_sprite_data / 3, len_sprite_data / 5, 0, GL_RED, GL_UNSIGNED_BYTE, &sprite_data[0]);
+        GLint loc_sprite_data = glGetUniformLocation(shaderProgram, "spriteData");
+        glUniform1i(loc_sprite_data, 0);
+
+        if ((err = glGetError()) != GL_NO_ERROR) {
+            printf("glGetError(tex_sprite): %x\n", err);
+            return 1;
+        }
+    } // ****
+
+    { // ****
+        GLbyte palette[] = {
+            255, 255, 255,
+            255,   0,   0,
+            0, 255,   0,
+        };
+
+        GLsizei len_palette = sizeof(palette) / 3;
+        printf("len_palette: %d\n", len_palette);
+
+        // Setup the `palette` uniform
+        GLuint tex_palette;
+        glGenTextures(1, &tex_palette);
+        glBindTexture(GL_TEXTURE_1D, tex_palette);
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGB8, len_palette, 0, GL_RGB, GL_UNSIGNED_BYTE, &palette[0]);
+        GLint loc_palette = glGetUniformLocation(shaderProgram, "palette");
+        glUniform1i(loc_palette, 1);
+
+        if ((err = glGetError()) != GL_NO_ERROR) {
+            printf("glGetError(tex_palette): %x\n", err);
+            return 1;
+        }
+    } // ****
+
     M ortho = matrix_ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -10.0f, 10.0f);
+    GLint loc_mat_ortho = glGetUniformLocation(shaderProgram, "mOrtho");
+    glUniformMatrix4fv(loc_mat_ortho, 1, false, (GLvoid const *)&ortho);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -200,14 +277,15 @@ int main() {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(shaderProgram);
-
-        GLint loc_mat_vm = glGetUniformLocation(shaderProgram, "mat_vm");
-        glUniformMatrix4fv(loc_mat_vm, 1, false, (GLvoid const *)&ortho);
-
-        glBindVertexArray(VAO);
+        glBindVertexArray(VAO); // Bind VAO
         glDrawElements(GL_TRIANGLES, sizeof(indices), GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+
+        if ((err = glGetError()) != GL_NO_ERROR) {
+            printf("glGetError(render): %x\n", err);
+            return 1;
+        }
+
+        glBindVertexArray(0); // Unbind VAO
 
         glfwSwapBuffers(window);
     }
